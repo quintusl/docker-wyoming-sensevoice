@@ -1,0 +1,6 @@
+wyoming==1.6.0
+funasr
+modelscope
+torch
+torchaudio
+sentencepiece
