@@ -1,121 +1,70 @@
-# wyoming-sensevoice
+# Wyoming Sherpa-ONNX SenseVoice (Cantonese STT)
 
-A [Wyoming protocol](https://github.com/rhasspy/wyoming) server that transcribes speech using [FunASR SenseVoice](https://github.com/FunAudioLLM/SenseVoice). Compatible with [Home Assistant](https://www.home-assistant.io/) and other Wyoming-based voice pipelines.
+An all-in-one Docker image for Cantonese Speech-to-Text (STT) using [Sherpa-ONNX](https://github.com/k2-fsa/sherpa-onnx) and the [SenseVoice](https://github.com/FunAudioLLM/SenseVoice) model, specifically optimized for Home Assistant's [Wyoming protocol](https://github.com/rhasspy/wyoming).
 
-## Quick start
+## Features
 
-### 1. Download the model
+- **All-in-One**: Contains the Wyoming server, Sherpa-ONNX engine, and model downloader.
+- **Cantonese Optimized**: Uses the `csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09` model, fine-tuned on 21.8k hours of Cantonese data.
+- **Automatic Setup**: Downloads the ~700MB model from Hugging Face on the first run.
+- **Clean Output**: Automatically strips SenseVoice language/emotion tags (e.g., `<|yue|>`, `<|HAPPY|>`) for better Home Assistant Assist compatibility.
 
-Pull the image (or build it locally) and run the one-shot download service to populate `./models`:
+## Prerequisites
 
-```bash
-docker compose run --rm download
-```
+- [Docker](https://docs.docker.com/get-docker/) installed.
+- (Optional) A directory to persist the downloaded model.
 
-This downloads the default model (`iic/SenseVoiceSmall`) into `./models/modelscope/` on your host. It only needs to run once.
+## Build Instructions
 
-To download a different model, set the environment variable before running:
-
-```bash
-SENSEVOICE_MODEL_NAME=iic/SenseVoiceLarge docker compose run --rm download
-```
-
-### 2. Start the server
+To build the image locally, run the following command in the project directory:
 
 ```bash
-docker compose up -d
+docker build -t wyoming-sherpa-sensevoice .
 ```
 
-The server listens on port **10300**. The `./models` directory is bind-mounted into the container so the downloaded model is used directly — no re-download needed.
+## Run Instructions
 
----
-
-## Manual Docker usage (without Compose)
-
-### Build
-
-```bash
-docker build -t wyoming-sensevoice .
-```
-
-### Download the model
-
-```bash
-mkdir -p models
-docker run --rm \
-  -v "$(pwd)/models:/models" \
-  -e SENSEVOICE_MODEL_NAME=iic/SenseVoiceSmall \
-  --entrypoint python3 \
-  wyoming-sensevoice \
-  -c "
-import os;
-from modelscope import snapshot_download;
-snapshot_download(os.environ['SENSEVOICE_MODEL_NAME'], cache_dir='/models/modelscope')
-"
-```
-
-### Run the server
+### 1. Basic Run
+Run the container and expose port `10300`:
 
 ```bash
 docker run -d \
-  --name wyoming-sensevoice \
+  --name wyoming-stt-cantonese \
   -p 10300:10300 \
-  -v "$(pwd)/models:/models" \
-  wyoming-sensevoice
+  wyoming-sherpa-sensevoice
 ```
 
----
+### 2. Recommended Run (With Persistent Model Storage)
+Mount a local directory to `/app/model` to avoid re-downloading the 700MB model every time you recreate the container:
 
-## Environment variables
+```bash
+docker run -d \
+  --name wyoming-stt-cantonese \
+  -p 10300:10300 \
+  -v $(pwd)/model:/app/model \
+  -e NUM_THREADS=4 \
+  wyoming-sherpa-sensevoice
+```
+
+## Configuration
+
+The following environment variables can be adjusted:
 
 | Variable | Default | Description |
-|---|---|---|
-| `SENSEVOICE_MODEL_NAME` | `iic/SenseVoiceSmall` | FunASR/ModelScope model identifier |
-| `SENSEVOICE_MODELS_DIR` | `/models` | Base directory for model files inside the container |
-| `MODELSCOPE_CACHE` | `/models/modelscope` | ModelScope download cache directory |
-| `SENSEVOICE_DEVICE` | `cpu` | Inference device — `cpu` or `cuda` |
+| :--- | :--- | :--- |
+| `MODEL_REPO` | `csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09` | The Hugging Face repo ID to download from. |
+| `NUM_THREADS` | `4` | Number of CPU threads used for inference. |
 
----
+## Home Assistant Integration
 
-## GPU support
+1.  In Home Assistant, go to **Settings** > **Devices & Services**.
+2.  Click **Add Integration** and search for **Wyoming**.
+3.  Enter the **IP address** of your Docker host and port **`10300`**.
+4.  Once added, go to **Settings** > **Voice Assistants**.
+5.  Edit your **Assist Pipeline** and select this server as your **Speech-to-Text** engine.
 
-Set `SENSEVOICE_DEVICE=cuda` and pass `--gpus all` to `docker run`, or add the following to `docker-compose.yml`:
+## Acknowledgements
 
-```yaml
-    environment:
-      SENSEVOICE_DEVICE: cuda
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-```
-
----
-
-## CI/CD — publishing to Docker Hub
-
-The included workflow (`.github/workflows/docker-publish.yml`) builds and pushes multi-platform images (`linux/amd64`, `linux/arm64`) automatically.
-
-**Required repository secrets** (Settings → Secrets and variables → Actions):
-
-| Secret | Value |
-|---|---|
-| `DOCKERHUB_USERNAME` | Your Docker Hub username |
-| `DOCKERHUB_TOKEN` | A Docker Hub [access token](https://hub.docker.com/settings/security) |
-
-**Tagging strategy:**
-
-| Event | Tags produced |
-|---|---|
-| Push to `main` | `latest`, `main` |
-| Push tag `v1.2.3` | `1.2.3`, `1.2`, `1`, `latest` |
-| Pull request | Image is built but **not** pushed |
-
----
-
-## Connecting to Home Assistant
-
-In Home Assistant → **Settings → Voice Assistants → Add Assistant**, choose **Wyoming Protocol** and enter the container host and port **10300**.
+- [Sherpa-ONNX](https://github.com/k2-fsa/sherpa-onnx) by k2-fsa.
+- [SenseVoice](https://github.com/FunAudioLLM/SenseVoice) by FunAudioLLM.
+- [Wyoming Protocol](https://github.com/rhasspy/wyoming) by Nabu Casa/Rhasspy.

@@ -1,37 +1,37 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
-ARG SENSEVOICE_MODEL_NAME=iic/SenseVoiceSmall
-
-ENV SENSEVOICE_MODEL_NAME=${SENSEVOICE_MODEL_NAME} \
-    SENSEVOICE_MODELS_DIR=/models \
-    MODELSCOPE_CACHE=/models/modelscope \
-    SENSEVOICE_DEVICE=cpu \
-    PYTHONUNBUFFERED=1
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install ffmpeg (runtime) and build-essential (compile-time for pip packages).
-# Purge build-essential in the same layer so it doesn't bloat the final image.
-COPY requirements.txt .
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg build-essential \
-    && pip3 install --no-cache-dir -r requirements.txt \
-    && apt-get purge -y --auto-remove build-essential \
-    && rm -rf /var/lib/apt/lists/*
+# Install Python dependencies
+# Use --no-cache-dir to keep image small
+RUN pip install --no-cache-dir \
+    numpy \
+    sherpa-onnx \
+    wyoming \
+    huggingface_hub
 
-# Copy the bridge server script.
-COPY server.py .
+# Copy application files
+COPY wyoming_sherpa_sensevoice.py .
+COPY download_model.py .
+COPY run.sh .
 
-# Run as a non-root user for better security.
-RUN useradd --system --no-create-home --uid 1000 appuser \
-    && mkdir -p /models \
-    && chown -R appuser /app /models
+# Ensure run.sh is executable
+RUN chmod +x run.sh
 
-VOLUME ["/models"]
+# Create model directory and set permissions
+RUN mkdir -p /app/model && chmod 777 /app/model
 
-USER appuser
-
+# Expose Wyoming port
 EXPOSE 10300
 
-ENTRYPOINT ["python3", "server.py"]
-CMD ["--uri", "tcp://0.0.0.0:10300"]
+# Default environment variables
+ENV MODEL_REPO="csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09"
+ENV NUM_THREADS=4
+
+# Run the server
+CMD ["./run.sh"]

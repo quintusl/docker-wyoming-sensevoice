@@ -1,8 +1,10 @@
+.git
+.github
+model/
 __pycache__/
-*.py[cod]
-*.egg-info/
-.git/
-.gitignore
-README.md
-docker-compose.yml
-models/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+Dockerfile
+.dockerignore
