@@ -31,7 +31,7 @@ Run the container and expose port `10300`:
 docker run -d \
   --name wyoming-stt-cantonese \
   -p 10300:10300 \
-  wyoming-sherpa-sensevoice
+  quintux/wyoming-sherpa-sensevoice:latest
 ```
 
 ### 2. Recommended Run (With Persistent Model Storage)
@@ -43,7 +43,9 @@ docker run -d \
   -p 10300:10300 \
   -v $(pwd)/model:/app/model \
   -e NUM_THREADS=4 \
-  wyoming-sherpa-sensevoice
+  -e MODEL_REPO=csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09 \
+  quintux/wyoming-sherpa-sensevoice:latest
+
 ```
 
 ## Configuration
