@@ -8,6 +8,7 @@ An all-in-one Docker image for Cantonese Speech-to-Text (STT) using [Sherpa-ONNX
 - **Cantonese Optimized**: Uses the `csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09` model, fine-tuned on 21.8k hours of Cantonese data.
 - **Automatic Setup**: Downloads the ~700MB model from Hugging Face on the first run.
 - **Clean Output**: Automatically strips SenseVoice language/emotion tags (e.g., `<|yue|>`, `<|HAPPY|>`) for better Home Assistant Assist compatibility.
+- **Traditional Chinese Support**: Automatically converts Simplified Chinese output to Traditional Chinese when the requested language is `zh-TW`, `zh-Hant`, `zh-HK`, `yue-HK`, or `yue-Hant`, using [OpenCC](https://github.com/BYVoid/OpenCC) with region-appropriate conversion profiles (Taiwan, Hong Kong, or generic Traditional).
 
 ## Prerequisites
 

@@ -13,7 +13,8 @@ RUN pip install --no-cache-dir \
     numpy \
     sherpa-onnx \
     wyoming \
-    huggingface_hub
+    huggingface_hub \
+    opencc-python-reimplemented
 
 # Copy application files
 COPY wyoming_sherpa_sensevoice.py .

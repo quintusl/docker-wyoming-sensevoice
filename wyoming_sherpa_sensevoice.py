@@ -7,6 +7,8 @@ import argparse
 import re
 from typing import Optional
 
+import opencc
+
 from wyoming.asr import Transcribe, Transcript
 from wyoming.audio import AudioChunk, AudioStart, AudioStop
 from wyoming.event import Event
@@ -17,6 +19,21 @@ from wyoming.info import Describe, Info, AsrModel, AsrProgram, Attribution
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 _LOGGER = logging.getLogger(__name__)
 
+# OpenCC converters for Traditional Chinese variants.
+# Keyed by language code; values are (converter, base_language) pairs.
+# base_language is the underlying SenseVoice language to use for recognition.
+_OPENCC_CONVERTERS: dict[str, tuple[opencc.OpenCC, str]] = {
+    "zh-tw":   (opencc.OpenCC("s2twp"), "zh"),  # Taiwan Traditional + phrase conversion
+    "zh-hant": (opencc.OpenCC("s2t"),   "zh"),  # Generic Traditional Chinese
+    "zh-hk":   (opencc.OpenCC("s2hk"),  "zh"),  # Hong Kong Traditional
+    "yue-hk":  (opencc.OpenCC("s2hk"),  "yue"), # Cantonese (Hong Kong)
+    "yue-hant":(opencc.OpenCC("s2t"),   "yue"), # Cantonese in Traditional
+}
+
+# All languages including Traditional Chinese variants
+_ALL_LANGUAGES = ["zh", "en", "ja", "ko", "yue",
+                  "zh-TW", "zh-Hant", "zh-HK", "yue-HK", "yue-Hant"]
+
 class SherpaSenseVoiceHandler(AsyncEventHandler):
     """Handles Wyoming events for Sherpa-ONNX SenseVoice STT."""
 
@@ -25,10 +42,18 @@ class SherpaSenseVoiceHandler(AsyncEventHandler):
         self.recognizer = recognizer
         self.audio_data = bytearray()
         self.sample_rate = 16000 # Default Wyoming sample rate
+        self._opencc_converter: Optional[opencc.OpenCC] = None
 
     async def handle_event(self, event: Event) -> bool:
         if Transcribe.is_type(event.type):
-            _LOGGER.info("Received Transcribe request")
+            transcribe = Transcribe.from_event(event)
+            lang = (transcribe.language or "").lower()
+            conv_entry = _OPENCC_CONVERTERS.get(lang)
+            self._opencc_converter = conv_entry[0] if conv_entry else None
+            if conv_entry:
+                _LOGGER.info("Received Transcribe request (lang=%s, will convert to Traditional Chinese)", transcribe.language)
+            else:
+                _LOGGER.info("Received Transcribe request (lang=%s)", transcribe.language)
             
         elif AudioStart.is_type(event.type):
             _LOGGER.info("Audio stream started")
@@ -56,6 +81,11 @@ class SherpaSenseVoiceHandler(AsyncEventHandler):
                 # SenseVoice often includes language/emotion tags like <|yue|>, <|HAPPY|>, etc.
                 text = re.sub(r'<\|.*?\|>', '', text).strip()
 
+                # Convert Simplified Chinese to Traditional Chinese if requested
+                if self._opencc_converter and text:
+                    text = self._opencc_converter.convert(text)
+                    _LOGGER.info(f"Converted to Traditional Chinese: {text}")
+
                 _LOGGER.info(f"Transcription: {text}")
                 await self.write_event(Transcript(text=text).event())
             except Exception as e:
@@ -70,7 +100,7 @@ class SherpaSenseVoiceHandler(AsyncEventHandler):
                 Info(
                     asr=[
                         AsrProgram(
-                            name="sherpa-onnx-sensevoice",
+                            name="sherpa-sensevoice",
                             description="Sherpa-ONNX SenseVoice STT",
                             attribution=Attribution(
                                 name="Alibaba Damo Academy",
@@ -88,7 +118,7 @@ class SherpaSenseVoiceHandler(AsyncEventHandler):
                                     ),
                                     installed=True,
                                     version="1.0.0",
-                                    languages=["zh", "en", "ja", "ko", "yue"],
+                                    languages=_ALL_LANGUAGES,
                                 )
                             ],
                         )
