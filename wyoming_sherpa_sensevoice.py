@@ -31,8 +31,8 @@ _OPENCC_CONVERTERS: dict[str, tuple[opencc.OpenCC, str]] = {
 }
 
 # All languages including Traditional Chinese variants
-_ALL_LANGUAGES = ["zh", "en", "ja", "ko", "yue",
-                  "zh-TW", "zh-Hant", "zh-HK", "yue-HK", "yue-Hant"]
+_ALL_LANGUAGES = ["zh-TW", "zh-Hant", "zh-HK", "yue-HK", "yue-Hant",
+                  "zh", "zh-CN", "zh-Hans", "yue", "en", "en-US", "en-GB", "ja", "ko"]
 
 class SherpaSenseVoiceHandler(AsyncEventHandler):
     """Handles Wyoming events for Sherpa-ONNX SenseVoice STT."""
