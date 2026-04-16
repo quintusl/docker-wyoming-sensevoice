@@ -38,9 +38,12 @@ _ALL_LANGUAGES = ["zh-TW", "zh-Hant", "zh-HK", "yue-HK", "yue-Hant",
 class SherpaSenseVoiceHandler(AsyncEventHandler):
     """Handles Wyoming events for Sherpa-ONNX SenseVoice STT."""
 
-    def __init__(self, recognizer: sherpa_onnx.OfflineRecognizer, *args, **kwargs):
+    def __init__(self, recognizer: sherpa_onnx.OfflineRecognizer,
+                 chinese_script_override: Optional[str] = None,
+                 *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.recognizer = recognizer
+        self.chinese_script_override = chinese_script_override  # "tc", "sc", or None
         self.audio_data = bytearray()
         self.sample_rate = 16000 # Default Wyoming sample rate
         self._opencc_converter: Optional[opencc.OpenCC] = None
@@ -49,12 +52,23 @@ class SherpaSenseVoiceHandler(AsyncEventHandler):
         if Transcribe.is_type(event.type):
             transcribe = Transcribe.from_event(event)
             lang = (transcribe.language or "").lower()
-            conv_entry = _OPENCC_CONVERTERS.get(lang)
-            self._opencc_converter = conv_entry[0] if conv_entry else None
-            if conv_entry:
-                _LOGGER.info("Received Transcribe request (lang=%s, will convert to Traditional Chinese)", transcribe.language)
+
+            if self.chinese_script_override == "tc":
+                # Force Traditional Chinese output
+                conv_entry = _OPENCC_CONVERTERS.get(lang)
+                self._opencc_converter = conv_entry[0] if conv_entry else opencc.OpenCC("s2t")
+                _LOGGER.info("Received Transcribe request (lang=%s, forced Traditional Chinese)", transcribe.language)
+            elif self.chinese_script_override == "sc":
+                # Force Simplified Chinese output (convert Traditional → Simplified)
+                self._opencc_converter = opencc.OpenCC("t2s")
+                _LOGGER.info("Received Transcribe request (lang=%s, forced Simplified Chinese)", transcribe.language)
             else:
-                _LOGGER.info("Received Transcribe request (lang=%s)", transcribe.language)
+                conv_entry = _OPENCC_CONVERTERS.get(lang)
+                self._opencc_converter = conv_entry[0] if conv_entry else None
+                if conv_entry:
+                    _LOGGER.info("Received Transcribe request (lang=%s, will convert to Traditional Chinese)", transcribe.language)
+                else:
+                    _LOGGER.info("Received Transcribe request (lang=%s)", transcribe.language)
             
         elif AudioStart.is_type(event.type):
             _LOGGER.info("Audio stream started")
@@ -85,7 +99,7 @@ class SherpaSenseVoiceHandler(AsyncEventHandler):
                 # Convert Simplified Chinese to Traditional Chinese if requested
                 if self._opencc_converter and text:
                     text = self._opencc_converter.convert(text)
-                    _LOGGER.info(f"Converted to Traditional Chinese: {text}")
+                    _LOGGER.info(f"OpenCC converted: {text}")
 
                 _LOGGER.info(f"Transcription: {text}")
                 await self.write_event(Transcript(text=text).event())
@@ -136,6 +150,11 @@ async def main():
     parser.add_argument("--uri", default="tcp://0.0.0.0:10300", help="Wyoming server URI")
     parser.add_argument("--num-threads", type=int, default=4, help="Number of threads for inference")
     parser.add_argument("--use-itn", action="store_true", help="Enable Inverse Text Normalization")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-tc", "--traditional-chinese", action="store_true",
+                       help="Force output to Traditional Chinese (override language-based conversion)")
+    group.add_argument("-sc", "--simplified-chinese", action="store_true",
+                       help="Force output to Simplified Chinese (disable any Traditional Chinese conversion)")
     args = parser.parse_args()
 
     _LOGGER.info(f"Loading SenseVoice model from {args.model}")
@@ -152,12 +171,20 @@ async def main():
     )
     _LOGGER.info("Model loaded successfully")
 
+    chinese_script_override = None
+    if args.traditional_chinese:
+        chinese_script_override = "tc"
+        _LOGGER.info("Chinese script override: Traditional Chinese (--tc)")
+    elif args.simplified_chinese:
+        chinese_script_override = "sc"
+        _LOGGER.info("Chinese script override: Simplified Chinese (--sc)")
+
     server = AsyncServer.from_uri(args.uri)
     _LOGGER.info(f"Ready! Listening on {args.uri}")
     
     # We need a factory to pass the recognizer to the handler
     def handler_factory(*args_inner, **kwargs_inner):
-        return SherpaSenseVoiceHandler(recognizer, *args_inner, **kwargs_inner)
+        return SherpaSenseVoiceHandler(recognizer, chinese_script_override, *args_inner, **kwargs_inner)
 
     await server.run(handler_factory)
 
