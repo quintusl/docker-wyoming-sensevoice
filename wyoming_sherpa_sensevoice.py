@@ -26,6 +26,7 @@ _OPENCC_CONVERTERS: dict[str, tuple[opencc.OpenCC, str]] = {
     "zh-tw":   (opencc.OpenCC("s2twp"), "zh"),  # Taiwan Traditional + phrase conversion
     "zh-hant": (opencc.OpenCC("s2t"),   "zh"),  # Generic Traditional Chinese
     "zh-hk":   (opencc.OpenCC("s2hk"),  "zh"),  # Hong Kong Traditional
+    "yue":     (opencc.OpenCC("s2hk"),  "yue"), # Cantonese (Hong Kong)
     "yue-hk":  (opencc.OpenCC("s2hk"),  "yue"), # Cantonese (Hong Kong)
     "yue-hant":(opencc.OpenCC("s2t"),   "yue"), # Cantonese in Traditional
 }
